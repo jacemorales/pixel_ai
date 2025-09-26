@@ -1,0 +1,77 @@
+<!-- #6366f1 -->
+<!-- background: linear-gradient(45deg, #6366f1, #8b5cf6); -->
+<!-- .chat-item.active[data-v-9b6322f0] {background-color: rgba(99, 102, 241, 0.1);} -->
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="style.css">
+        <title>Pixel AI</title>
+    </head>
+    <body>
+        
+        <div id="app" v-cloak>
+        <div class="app_container search_active" v-cloak>
+            
+            <div class="navv">
+            <div class="nav close">
+                <div class="open_icon"><img src="icns/arrow-r.gif"></div>
+                <div class="profile"><img src="img.jpg">
+                    <div class="profile_name">
+                        <div class="user_firstname">Jace</div>
+                        <div class="user_lastname">Morales</div>
+                    </div>
+                </div>
+                <div class="chats">
+                    <div class="new_chat" title="New Chat"><div class="add_icon"><img src="icns/plus.gif"></div><div class="chat_txt">New Chat</div></div>
+                    <div class="chat_history">
+                        <a href="" class="history_item">How to make soda</a>
+                        <a href="" class="history_item">How to make soda</a>
+                        <a href="" class="history_item">How to make soda</a>
+                    </div>
+                </div>
+            </div>
+            </div>
+            
+            <div class="app_main">
+                <div class="chat_container" >
+                    <div class="chat_container_content">
+                    <div v-for="(msg, index) in messages" :key="index" :class="msg.sender">
+                        {{ msg.text }}
+                    </div>
+                    </div>
+                    <button @click="clearChat" class="clear-btn">Clear Chat</button>
+                    <div class="dummy"></div>
+                </div>
+                <div class="intro bottom">
+                    <div class="app_name">{{app}}</div>
+                    <div class="app_info">Powered by <span>Pixel v1 Chat Engine</span></div>
+                    <div class="container">
+                        <div class="search">
+                            <textarea rows="1" @keyup="getKey" ref="searchInput" name="ai_search" id="search_bar" placeholder="Pixel AI Search..."></textarea>
+                        </div>
+                        
+                        <div class="search_utilis">
+                            <div class="image-to-text">Image to Text</div>
+                            <div class="audio-to-text">Audio to Text</div>
+                            <div class="submit_search">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+                                    <g><path d="M19.071,4.929a10,10,0,1,0,0,14.142A10.011,10.011,0,0,0,19.071,4.929ZM17.657,17.657a8,8,0,1,1,0-11.314A8.01,8.01,0,0,1,17.657,17.657Z" />
+                                        <polygon points="14 12.586 9.707 8.293 8.293 9.707 12.586 14 9 14 9 16 16 16 16 9 14 9 14 12.586" />
+                                    </g>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </body>
+    </html>
+    <script src="vue.global.js"></script>
+    <script src="vue_script.js"></script>
+    <script src="script.js"></script>
+    
