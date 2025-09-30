@@ -39,36 +39,44 @@ const ChatComponent = {
                 <!-- Standard Chat View -->
                 <div v-if="messages.length > 0" class="chat_container" ref="chatContainer">
                     <div class="chat_container_content">
-                        <div v-for="(msg, index) in messages" :key="index" :class="['message_bubble', msg.sender]">
-                            <div class="message_content">
-                                <div v-if="msg.replyTo" class="quoted_reply">
-                                    <p>{{ msg.replyTo.text }}</p>
-                                </div>
-                                <div v-if="msg.files && msg.files.length" class="attachments_list">
-                                    <div v-for="file in msg.files" :key="file.name" class="attached_file">
-                                        <i class="fas fa-file-alt"></i>
-                                        <div class="file_details">
-                                            <span class="file_name">{{ file.name }}</span>
-                                            <span class="file_type">{{ file.type }}</span>
-                                        </div>
+                        <template v-for="(turn, turnIndex) in messages" :key="turn.id">
+                            <!-- User Message -->
+                            <div class="message_bubble user_search">
+                                <div class="message_content">
+                                    <div v-if="turn.replyTo" class="quoted_reply">
+                                        <p>{{ turn.replyTo.text }}</p>
                                     </div>
-                                </div>
-                                <span class="message_text">{{ msg.text }}</span>
-                                <div class="message_actions">
-                                     <div v-if="msg.sender === 'ai_results'">
-                                        <i class="fas fa-copy" @click="copyMessage(msg.text)"></i>
-                                        <i class="fas fa-volume-up speaker-icon" @click="speakMessage(msg.text)"></i>
-                                        <i class="fas fa-reply reply-icon" @click="replyToMessage(msg)"></i>
-                                        <i class="fas fa-sync-alt" @click="regenerateResponse(msg)"></i>
+                                    <div class="message_version_control" v-if="turn.user.history.length > 1">
+                                        <i class="fas fa-chevron-left" @click="navigateVersion(turn, -1)"></i>
+                                        <span>{{ turn.user.currentVersion + 1 }} / {{ turn.user.history.length }}</span>
+                                        <i class="fas fa-chevron-right" @click="navigateVersion(turn, 1)"></i>
                                     </div>
-                                    <div v-if="msg.sender === 'user_search'">
-                                        <i class="fas fa-copy" @click="copyMessage(msg.text)"></i>
-                                        <i class="fas fa-pencil-alt" @click="editMessage(msg, index)"></i>
-                                        <i class="fas fa-redo" @click="resendMessage(msg)"></i>
+                                    <span class="message_text">{{ turn.user.history[turn.user.currentVersion].text }}</span>
+                                    <div class="message_actions">
+                                        <i class="fas fa-copy" @click="copyMessage(turn.user.history[turn.user.currentVersion].text)"></i>
+                                        <i class="fas fa-pencil-alt" @click="editMessage(turn, turnIndex)"></i>
+                                        <i class="fas fa-redo" @click="resendMessage(turn)"></i>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                            <!-- AI Message -->
+                            <div class="message_bubble ai_results" v-if="turn.ai && turn.ai.history.length > 0">
+                                <div class="message_content">
+                                    <div class="message_version_control" v-if="turn.ai.history.length > 1">
+                                        <i class="fas fa-chevron-left" @click="navigateVersion(turn, -1)"></i>
+                                        <span>{{ turn.ai.currentVersion + 1 }} / {{ turn.ai.history.length }}</span>
+                                        <i class="fas fa-chevron-right" @click="navigateVersion(turn, 1)"></i>
+                                    </div>
+                                    <span class="message_text">{{ turn.ai.history[turn.ai.currentVersion].text }}</span>
+                                    <div class="message_actions">
+                                        <i class="fas fa-copy" @click="copyMessage(turn.ai.history[turn.ai.currentVersion].text)"></i>
+                                        <i class="fas fa-volume-up speaker-icon" @click="speakMessage(turn.ai.history[turn.ai.currentVersion].text)"></i>
+                                        <i class="fas fa-reply reply-icon" @click="replyToMessage(turn)"></i>
+                                        <i class="fas fa-sync-alt" @click="regenerateAiResponse(turn)"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                     <div class="dummy"></div>
                 </div>
@@ -110,12 +118,12 @@ const ChatComponent = {
                             <div class="mic_icon" @click="toggleVoiceSearch">
                                 <i class="fas fa-microphone"></i>
                             </div>
-                             <div class="recording_animation" v-show="isRecording">
+                             <div class="recording_animation" :class="{ 'is-visualizing': isVisualizing }" v-show="isRecording">
                                 <div class="wave"></div>
                                 <div class="wave"></div>
                                 <div class="wave"></div>
                             </div>
-                            <div class="submit_search">
+                            <div class="submit_search" @click="sendMessage">
                                <i class="fas fa-arrow-up"></i>
                             </div>
                         </div>
@@ -175,6 +183,7 @@ const ChatComponent = {
             chats: [],
             activeChatId: null,
             isRecording: false,
+            isVisualizing: false,
             recognition: null,
             replyingToMessage: null,
             audioContext: null,
@@ -281,6 +290,14 @@ const ChatComponent = {
             textarea.value = text;
             this.getKey({ key: 'Enter', target: textarea, shiftKey: false, preventDefault: () => {} });
         },
+
+        sendMessage() {
+            const textarea = this.$refs.searchInput;
+            // We only trigger sending if there is text or there are files.
+            if (textarea.value.trim() || this.importedFiles.length > 0) {
+                this.getKey({ key: 'Enter', target: textarea, shiftKey: false, preventDefault: () => {} });
+            }
+        },
         
         getKey(event) {
             const textarea = event.target;
@@ -292,7 +309,18 @@ const ChatComponent = {
 
                 if (this.editingMessage !== null) {
                     if (messageText && this.activeChat) {
-                        this.activeChat.messages[this.editingMessage.index].text = messageText;
+                        const turn = this.activeChat.messages[this.editingMessage.turnIndex];
+                        
+                        // Add a new version to the user prompt history
+                        turn.user.history.push({ text: messageText, files: [] });
+                        turn.user.currentVersion = turn.user.history.length - 1;
+                        
+                        // Remove subsequent turns from the chat
+                        this.activeChat.messages.splice(this.editingMessage.turnIndex + 1);
+
+                        // Generate a new AI response for this new prompt version
+                        this._generateAiResponseForTurn(turn, true);
+
                         this.editingMessage = null;
                         textarea.value = "";
                         this.autoResize(textarea);
@@ -301,43 +329,35 @@ const ChatComponent = {
                     if (messageText || this.importedFiles.length > 0) {
                         let targetChat = this.activeChat;
 
-                        // If there is no active chat, create a new one.
                         if (!targetChat) {
                             const newId = this.generateUniqueId();
                             const chatName = messageText.substring(0, 40) + (messageText.length > 40 ? '...' : '') || 'New Chat';
-                            const newChatObject = {
-                                id: newId,
-                                name: chatName,
-                                messages: []
-                            };
-                            this.chats.push(newChatObject);
-                            this.$router.push(`/chat/${newId}`); // This will trigger watcher to set activeChatId
-                            targetChat = newChatObject;
+                            targetChat = { id: newId, name: chatName, messages: [] };
+                            this.chats.push(targetChat);
+                            this.$router.push(`/chat/${newId}`);
                         }
                         
-                        const newMessage = {
-                            text: messageText,
-                            sender: 'user_search',
+                        const newTurn = {
+                            id: this.generateUniqueId(),
+                            user: {
+                                history: [{ text: messageText, files: this.importedFiles }],
+                                currentVersion: 0,
+                            },
+                            ai: {
+                                history: [],
+                                currentVersion: 0
+                            },
                             replyTo: this.replyingToMessage ? {
-                                text: this.replyingToMessage.text,
-                                sender: this.replyingToMessage.sender
-                            } : null,
-                            files: this.importedFiles,
+                                text: this.replyingToMessage.ai.history[this.replyingToMessage.ai.currentVersion].text
+                            } : null
                         };
                         
-                        // Auto-name chat if it's the first message and name is still default
                         if (targetChat.messages.length === 0 && messageText) {
                            targetChat.name = messageText.substring(0, 40) + (messageText.length > 40 ? '...' : '');
                         }
                         
-                        targetChat.messages.push(newMessage);
-
-                        setTimeout(() => {
-                            targetChat.messages.push({
-                                text: "This is a placeholder AI response.",
-                                sender: "ai_results"
-                            });
-                        }, 500);
+                        targetChat.messages.push(newTurn);
+                        this._generateAiResponseForTurn(newTurn);
 
                         textarea.value = "";
                         this.autoResize(textarea);
@@ -399,6 +419,7 @@ const ChatComponent = {
                     const source = this.audioContext.createMediaStreamSource(this.audioStream);
                     source.connect(this.analyser);
                     this.recognition.start();
+                    this.isVisualizing = true;
                     this.visualizeAudio();
                 } catch (err) {
                     console.error("Error accessing microphone:", err);
@@ -420,7 +441,7 @@ const ChatComponent = {
                 const rms = Math.sqrt(sumSquares / dataArray.length);
                 const volume = Math.min(1, rms * 5);
                 const scaleY = Math.max(0.1, volume * 2);
-                const waveElements = document.querySelectorAll('.wave');
+
                 waveElements.forEach(wave => {
                     wave.style.transform = `scaleY(${scaleY})`;
                 });
@@ -441,8 +462,10 @@ const ChatComponent = {
                 this.audioContext.close();
                 this.audioContext = null;
             }
-            document.querySelectorAll('.wave').forEach(wave => {
-                wave.style.transform = 'scaleY(0.1)';
+            this.isVisualizing = false;
+            const waveElements = document.querySelectorAll('.recording_animation .wave');
+            waveElements.forEach(wave => {
+                wave.style.transform = '';
             });
         },
         speakMessage(text) {
@@ -513,8 +536,8 @@ const ChatComponent = {
                 });
              }
         },
-        replyToMessage(message) {
-            this.replyingToMessage = message;
+        replyToMessage(turn) {
+            this.replyingToMessage = turn;
             this.$refs.searchInput.focus();
         },
         cancelReply() {
@@ -528,35 +551,57 @@ const ChatComponent = {
                 console.error('Failed to copy text: ', err);
             });
         },
-        editMessage(message, index) {
-            this.editingMessage = { index, text: message.text };
+        editMessage(turn, turnIndex) {
+            this.editingMessage = { turnIndex, ...turn };
             const textarea = this.$refs.searchInput;
-            textarea.value = message.text;
+            textarea.value = turn.user.history[turn.user.currentVersion].text;
             textarea.focus();
         },
-        resendMessage(message) {
-             const newMessage = {
-                text: message.text,
-                sender: 'user_search',
-                files: message.files,
+        resendMessage(turn) {
+            const currentPrompt = turn.user.history[turn.user.currentVersion];
+            const newTurn = {
+                id: this.generateUniqueId(),
+                user: {
+                    history: [{ text: currentPrompt.text, files: currentPrompt.files }],
+                    currentVersion: 0,
+                },
+                ai: {
+                    history: [],
+                    currentVersion: 0
+                }
             };
-            this.activeChat.messages.push(newMessage);
+            this.activeChat.messages.push(newTurn);
+            this._generateAiResponseForTurn(newTurn);
+        },
+        regenerateAiResponse(turn) {
+            if (!this.activeChat || !turn) return;
+
+            // Get the current user prompt and add it as a new version
+            const currentPrompt = turn.user.history[turn.user.currentVersion];
+            turn.user.history.push({ text: currentPrompt.text, files: currentPrompt.files });
+            turn.user.currentVersion = turn.user.history.length - 1;
+
+            // Now, generate a new AI response for this new prompt version
+            this._generateAiResponseForTurn(turn, true);
+        },
+        _generateAiResponseForTurn(turn, isRegeneration = false) {
+            if (!this.activeChat || !turn) return;
+
             setTimeout(() => {
-                this.activeChat.messages.push({
-                    text: "This is a placeholder AI response.",
-                    sender: "ai_results"
-                });
+                const promptVersion = turn.user.currentVersion + 1;
+                const newResponseText = `This is a ${isRegeneration ? 'regenerated ' : ''}response for prompt version ${promptVersion}.`;
+                
+                turn.ai.history.push({ text: newResponseText });
+                turn.ai.currentVersion = turn.ai.history.length - 1;
             }, 500);
         },
-        regenerateResponse(aiMessage) {
-            if (!this.activeChat) return;
-            const aiMessageIndex = this.activeChat.messages.findIndex(msg => msg === aiMessage);
-            if (aiMessageIndex > 0) {
-                for (let i = aiMessageIndex - 1; i >= 0; i--) {
-                    if (this.activeChat.messages[i].sender === 'user_search') {
-                        this.resendMessage(this.activeChat.messages[i]);
-                        break;
-                    }
+        navigateVersion(turn, direction) {
+            const newVersion = turn.user.currentVersion + direction;
+            if (newVersion >= 0 && newVersion < turn.user.history.length) {
+                turn.user.currentVersion = newVersion;
+                // AI version should also update to match, if it exists
+                if (turn.ai && turn.ai.history[newVersion]) {
+                    turn.ai.currentVersion = newVersion;
                 }
             }
         },
