@@ -31,10 +31,7 @@ const ChatComponent = {
                 </div>
                 <div class="nav_footer">
                     <div class="app_info">Powered by <span>Pixel v1 Chat Engine</span></div>
-                    <div class.app_version">v1.0.1</div>
-                    <div class.app_version">v1.0.1</div>
-                    <div class.app_version">v1.0.1</div>
-                    <div class.app_version">v1.0.1</div>
+                    <div class="app_version">v1.0.1</div>
                 </div>
             </div>
             
@@ -56,19 +53,19 @@ const ChatComponent = {
                                         </div>
                                     </div>
                                 </div>
-                                {{ msg.text }}
-                            </div>
-                            <div class="message_actions">
-                                 <div v-if="msg.sender === 'ai_results'">
-                                    <i class="fas fa-copy tooltip" data-tooltip="Copy" @click="copyMessage(msg.text)"></i>
-                                    <i class="fas fa-volume-up speaker-icon tooltip" data-tooltip="Read aloud" @click="speakMessage(msg.text)"></i>
-                                    <i class="fas fa-reply reply-icon tooltip" data-tooltip="Reply" @click="replyToMessage(msg)"></i>
-                                    <i class="fas fa-sync-alt tooltip" data-tooltip="Regenerate" @click="regenerateResponse(msg)"></i>
-                                </div>
-                                <div v-if="msg.sender === 'user_search'">
-                                    <i class="fas fa-copy tooltip" data-tooltip="Copy" @click="copyMessage(msg.text)"></i>
-                                    <i class="fas fa-pencil-alt tooltip" data-tooltip="Edit" @click="editMessage(msg, index)"></i>
-                                    <i class="fas fa-redo tooltip" data-tooltip="Resend" @click="resendMessage(msg)"></i>
+                                <span class="message_text">{{ msg.text }}</span>
+                                <div class="message_actions">
+                                     <div v-if="msg.sender === 'ai_results'">
+                                        <i class="fas fa-copy tooltip" data-tooltip="Copy" @click="copyMessage(msg.text)"></i>
+                                        <i class="fas fa-volume-up speaker-icon tooltip" data-tooltip="Read aloud" @click="speakMessage(msg.text)"></i>
+                                        <i class="fas fa-reply reply-icon tooltip" data-tooltip="Reply" @click="replyToMessage(msg)"></i>
+                                        <i class="fas fa-sync-alt tooltip" data-tooltip="Regenerate" @click="regenerateResponse(msg)"></i>
+                                    </div>
+                                    <div v-if="msg.sender === 'user_search'">
+                                        <i class="fas fa-copy tooltip" data-tooltip="Copy" @click="copyMessage(msg.text)"></i>
+                                        <i class="fas fa-pencil-alt tooltip" data-tooltip="Edit" @click="editMessage(msg, index)"></i>
+                                        <i class="fas fa-redo tooltip" data-tooltip="Resend" @click="resendMessage(msg)"></i>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -78,9 +75,6 @@ const ChatComponent = {
 
                 <!-- Initial Welcome Screen -->
                 <div v-else class="initial_ui_container">
-                    <div class="initial_branding">
-                        <h1>{{ app }}</h1>
-                    </div>
                     <div class="prompt_suggestions">
                         <div class="prompt_card" v-for="suggestion in promptSuggestions" @click="sendSuggestion(suggestion.text)">
                             <h4>{{ suggestion.title }}</h4>
@@ -137,7 +131,7 @@ const ChatComponent = {
                 <p class="modal_message">{{ modalConfig.message }}</p>
                 <div class="modal_actions">
                     <button class="modal_button cancel" @click="hideModal">{{ modalConfig.cancelText }}</button>
-                    <button class="modal_button confirm" @click="confirmAction">{{ modalConfig.confirmText }}</button>
+                    <button class="modal_button confirm" :class="modalConfig.confirmClass" @click="confirmAction">{{ modalConfig.confirmText }}</button>
                 </div>
             </div>
         </div>
@@ -153,6 +147,14 @@ const ChatComponent = {
                     </span>
                 </div>
                 <div class="tts_animation_container">
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
                     <div class="wave"></div>
                     <div class="wave"></div>
                     <div class="wave"></div>
@@ -298,14 +300,20 @@ const ChatComponent = {
                         const newMessage = {
                             text: messageText,
                             sender: 'user_search',
-                            replyTo: this.replyingToMessage ? { 
-                                text: this.replyingToMessage.text, 
-                                sender: this.replyingToMessage.sender 
+                            replyTo: this.replyingToMessage ? {
+                                text: this.replyingToMessage.text,
+                                sender: this.replyingToMessage.sender
                             } : null,
                             files: this.importedFiles,
                         };
-                        this.activeChat.messages.push(newMessage);
                         
+                        // Auto-name chat if it's the first message
+                        if (this.activeChat.name === 'New Chat' && messageText) {
+                           this.activeChat.name = messageText.substring(0, 40) + (messageText.length > 40 ? '...' : '');
+                        }
+                        
+                        this.activeChat.messages.push(newMessage);
+
                         setTimeout(() => {
                             this.activeChat.messages.push({
                                 text: "This is a placeholder AI response.",
@@ -545,14 +553,16 @@ const ChatComponent = {
                     message: 'Are you sure you want to permanently delete this chat?',
                     confirmText: 'Delete',
                     cancelText: 'Cancel',
-                    action: () => this.deleteChat(payload)
+                    action: () => this.deleteChat(payload),
+                    confirmClass: 'delete'
                 },
                 clearChat: {
                     title: 'Clear Chat',
                     message: 'Are you sure you want to clear all messages in this chat?',
                     confirmText: 'Clear',
                     cancelText: 'Cancel',
-                    action: () => this.clearChat(payload)
+                    action: () => this.clearChat(payload),
+                    confirmClass: 'primary'
                 }
             };
             this.modalConfig = configs[actionType];
@@ -639,6 +649,9 @@ const router = VueRouter.createRouter({
 });
 
 // 4. Create and mount the root instance.
-const app = Vue.createApp({});
+const App = {
+    template: `<router-view></router-view>`
+};
+const app = Vue.createApp(App);
 app.use(router);
 app.mount('#app');
