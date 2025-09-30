@@ -35,7 +35,8 @@ const ChatComponent = {
                 </div>
             </div>
             
-            <div class="app_main" :class="{ 'initial-view': messages.length === 0 }">
+            <div class="app_main" :class="{ 'initial-view': messages.length === 0, 'is_editing': editingMessage !== null }">
+                <div class="edit_overlay" v-if="editingMessage !== null" @click="cancelEdit"></div>
                 <!-- Standard Chat View -->
                 <div v-if="messages.length > 0" class="chat_container" ref="chatContainer">
                     <div class="chat_container_content">
@@ -46,34 +47,34 @@ const ChatComponent = {
                                     <div v-if="turn.replyTo" class="quoted_reply">
                                         <p>{{ turn.replyTo.text }}</p>
                                     </div>
+                                    <span class="message_text">{{ turn.user.history[turn.user.currentVersion].text }}</span>
                                     <div class="message_version_control" v-if="turn.user.history.length > 1">
                                         <i class="fas fa-chevron-left" @click="navigateVersion(turn, -1)"></i>
                                         <span>{{ turn.user.currentVersion + 1 }} / {{ turn.user.history.length }}</span>
                                         <i class="fas fa-chevron-right" @click="navigateVersion(turn, 1)"></i>
                                     </div>
-                                    <span class="message_text">{{ turn.user.history[turn.user.currentVersion].text }}</span>
-                                    <div class="message_actions">
-                                        <i class="fas fa-copy" @click="copyMessage(turn.user.history[turn.user.currentVersion].text)"></i>
-                                        <i class="fas fa-pencil-alt" @click="editMessage(turn, turnIndex)"></i>
-                                        <i class="fas fa-redo" @click="resendMessage(turn)"></i>
-                                    </div>
+                                </div>
+                                <div class="message_actions">
+                                    <i class="fas fa-copy" @click="copyMessage(turn.user.history[turn.user.currentVersion].text)"></i>
+                                    <i class="fas fa-pencil-alt" @click="editMessage(turn, turnIndex)"></i>
+                                    <i class="fas fa-redo" @click="resendMessage(turn)"></i>
                                 </div>
                             </div>
                             <!-- AI Message -->
                             <div class="message_bubble ai_results" v-if="turn.ai && turn.ai.history.length > 0">
                                 <div class="message_content">
+                                    <span class="message_text">{{ turn.ai.history[turn.ai.currentVersion].text }}</span>
                                     <div class="message_version_control" v-if="turn.ai.history.length > 1">
                                         <i class="fas fa-chevron-left" @click="navigateVersion(turn, -1)"></i>
                                         <span>{{ turn.ai.currentVersion + 1 }} / {{ turn.ai.history.length }}</span>
                                         <i class="fas fa-chevron-right" @click="navigateVersion(turn, 1)"></i>
                                     </div>
-                                    <span class="message_text">{{ turn.ai.history[turn.ai.currentVersion].text }}</span>
-                                    <div class="message_actions">
-                                        <i class="fas fa-copy" @click="copyMessage(turn.ai.history[turn.ai.currentVersion].text)"></i>
-                                        <i class="fas fa-volume-up speaker-icon" @click="speakMessage(turn.ai.history[turn.ai.currentVersion].text)"></i>
-                                        <i class="fas fa-reply reply-icon" @click="replyToMessage(turn)"></i>
-                                        <i class="fas fa-sync-alt" @click="regenerateAiResponse(turn)"></i>
-                                    </div>
+                                </div>
+                                <div class="message_actions">
+                                    <i class="fas fa-copy" @click="copyMessage(turn.ai.history[turn.ai.currentVersion].text)"></i>
+                                    <i class="fas fa-volume-up speaker-icon" @click="speakMessage(turn.ai.history[turn.ai.currentVersion].text)"></i>
+                                    <i class="fas fa-reply reply-icon" @click="replyToMessage(turn)"></i>
+                                    <i class="fas fa-sync-alt" @click="regenerateAiResponse(turn)"></i>
                                 </div>
                             </div>
                         </template>
@@ -97,7 +98,7 @@ const ChatComponent = {
                              <div class="replying_to_bar" v-if="replyingToMessage">
                                 <div class="reply_info">
                                     <i class="fas fa-reply"></i>
-                                    <p>Replying to: "<span>{{ replyingToMessage.text }}</span>"</p>
+                                    <p>Replying to: "<span>{{ replyingToMessage.ai.history[replyingToMessage.ai.currentVersion].text }}</span>"</p>
                                 </div>
                                 <i class="fas fa-times cancel_reply" @click="cancelReply"></i>
                             </div>
@@ -119,6 +120,13 @@ const ChatComponent = {
                                 <i class="fas fa-microphone"></i>
                             </div>
                              <div class="recording_animation" :class="{ 'is-visualizing': isVisualizing }" v-show="isRecording">
+                                <div class="wave"></div>
+                                <div class="wave"></div>
+                                <div class="wave"></div>
+                                <div class="wave"></div>
+                                <div class="wave"></div>
+                                <div class="wave"></div>
+                                <div class="wave"></div>
                                 <div class="wave"></div>
                                 <div class="wave"></div>
                                 <div class="wave"></div>
@@ -244,10 +252,22 @@ const ChatComponent = {
     created() {
         const savedChats = localStorage.getItem("pixelAiChats");
         if (savedChats) {
-            this.chats = JSON.parse(savedChats);
+            let chats = JSON.parse(savedChats);
+            this.chats = this.migrateChats(chats);
         }
-        // Set active chat based on route, but don't create a new one automatically
-        this.activeChatId = this.$route.params.id || null;
+
+        const chatId = this.$route.params.id;
+        if (chatId) {
+            const chatExists = this.chats.some(chat => chat.id === chatId);
+            if (chatExists) {
+                this.activeChatId = chatId;
+            } else {
+                this.$nextTick(() => this.$chatError('Error: Chat not found.'));
+                return;
+            }
+        } else {
+            this.activeChatId = null;
+        }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
@@ -319,7 +339,7 @@ const ChatComponent = {
                         this.activeChat.messages.splice(this.editingMessage.turnIndex + 1);
 
                         // Generate a new AI response for this new prompt version
-                        this._generateAiResponseForTurn(turn, true);
+                        this._generateAiResponseForTurn(this.activeChat, turn, true);
 
                         this.editingMessage = null;
                         textarea.value = "";
@@ -332,9 +352,10 @@ const ChatComponent = {
                         if (!targetChat) {
                             const newId = this.generateUniqueId();
                             const chatName = messageText.substring(0, 40) + (messageText.length > 40 ? '...' : '') || 'New Chat';
-                            targetChat = { id: newId, name: chatName, messages: [] };
-                            this.chats.push(targetChat);
+                            const newChat = { id: newId, name: chatName, messages: [] };
+                            this.chats.push(newChat);
                             this.$router.push(`/chat/${newId}`);
+                            targetChat = this.chats.find(c => c.id === newId);
                         }
                         
                         const newTurn = {
@@ -357,7 +378,7 @@ const ChatComponent = {
                         }
                         
                         targetChat.messages.push(newTurn);
-                        this._generateAiResponseForTurn(newTurn);
+                        this._generateAiResponseForTurn(targetChat, newTurn);
 
                         textarea.value = "";
                         this.autoResize(textarea);
@@ -428,23 +449,36 @@ const ChatComponent = {
             }
         },
         visualizeAudio() {
-            const animation = () => {
-                if (!this.analyser) return;
-                const bufferLength = this.analyser.fftSize;
-                const dataArray = new Uint8Array(bufferLength);
-                this.analyser.getByteTimeDomainData(dataArray);
-                let sumSquares = 0.0;
-                for (const amplitude of dataArray) {
-                    const normalizedAmplitude = (amplitude / 128.0) - 1.0;
-                    sumSquares += normalizedAmplitude * normalizedAmplitude;
-                }
-                const rms = Math.sqrt(sumSquares / dataArray.length);
-                const volume = Math.min(1, rms * 5);
-                const scaleY = Math.max(0.1, volume * 2);
+            const waveElements = document.querySelectorAll('.recording_animation .wave');
+            if (!waveElements.length) return;
 
-                waveElements.forEach(wave => {
-                    wave.style.transform = `scaleY(${scaleY})`;
-                });
+            const animation = () => {
+                if (!this.analyser) {
+                    if(this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+                    return;
+                }
+
+                // Use frequency data for a classic equalizer look
+                const bufferLength = this.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                this.analyser.getByteFrequencyData(dataArray);
+
+                const numWaves = waveElements.length;
+                const bandWidth = Math.floor(bufferLength / numWaves);
+
+                for (let i = 0; i < numWaves; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < bandWidth; j++) {
+                        sum += dataArray[(i * bandWidth) + j];
+                    }
+                    const average = sum / bandWidth;
+                    // Scale the average to a reasonable height for the wave
+                    const scaleY = Math.max(0.1, Math.min(average / 140, 1.5));
+                    if (waveElements[i]) {
+                       waveElements[i].style.transform = `scaleY(${scaleY})`;
+                    }
+                }
+
                 this.animationFrameId = requestAnimationFrame(animation);
             };
             animation();
@@ -547,8 +581,11 @@ const ChatComponent = {
             this.isNavClosed = !this.isNavClosed;
         },
         copyMessage(text) {
-            navigator.clipboard.writeText(text).then(() => {}).catch(err => {
+            navigator.clipboard.writeText(text).then(() => {
+                this.$notifications.add('Copied to clipboard!');
+            }).catch(err => {
                 console.error('Failed to copy text: ', err);
+                this.$notifications.add('Failed to copy text', 'error');
             });
         },
         editMessage(turn, turnIndex) {
@@ -556,6 +593,11 @@ const ChatComponent = {
             const textarea = this.$refs.searchInput;
             textarea.value = turn.user.history[turn.user.currentVersion].text;
             textarea.focus();
+        },
+        cancelEdit() {
+            this.editingMessage = null;
+            this.$refs.searchInput.value = '';
+            this.autoResize(this.$refs.searchInput);
         },
         resendMessage(turn) {
             const currentPrompt = turn.user.history[turn.user.currentVersion];
@@ -571,7 +613,7 @@ const ChatComponent = {
                 }
             };
             this.activeChat.messages.push(newTurn);
-            this._generateAiResponseForTurn(newTurn);
+            this._generateAiResponseForTurn(this.activeChat, newTurn);
         },
         regenerateAiResponse(turn) {
             if (!this.activeChat || !turn) return;
@@ -582,17 +624,21 @@ const ChatComponent = {
             turn.user.currentVersion = turn.user.history.length - 1;
 
             // Now, generate a new AI response for this new prompt version
-            this._generateAiResponseForTurn(turn, true);
+            this._generateAiResponseForTurn(this.activeChat, turn, true);
         },
-        _generateAiResponseForTurn(turn, isRegeneration = false) {
-            if (!this.activeChat || !turn) return;
+        _generateAiResponseForTurn(chat, turn, isRegeneration = false) {
+            if (!chat || !turn) return;
+
+             // Find the turn in the reactive chat object to ensure UI updates
+            const reactiveTurn = chat.messages.find(t => t.id === turn.id);
+            if (!reactiveTurn) return;
 
             setTimeout(() => {
-                const promptVersion = turn.user.currentVersion + 1;
+                const promptVersion = reactiveTurn.user.currentVersion + 1;
                 const newResponseText = `This is a ${isRegeneration ? 'regenerated ' : ''}response for prompt version ${promptVersion}.`;
                 
-                turn.ai.history.push({ text: newResponseText });
-                turn.ai.currentVersion = turn.ai.history.length - 1;
+                reactiveTurn.ai.history.push({ text: newResponseText });
+                reactiveTurn.ai.currentVersion = reactiveTurn.ai.history.length - 1;
             }, 500);
         },
         navigateVersion(turn, direction) {
@@ -702,7 +748,46 @@ const ChatComponent = {
             if (chat) {
                 chat.messages = [];
             }
-        }
+        },
+
+        migrateChats(chats) {
+            return chats.map(chat => {
+                if (!chat.messages) return chat;
+
+                chat.messages = chat.messages.map(turn => {
+                    const newTurn = JSON.parse(JSON.stringify(turn));
+
+                    // Migrate user message if it's not in the new format
+                    if (!newTurn.user || !Array.isArray(newTurn.user.history)) {
+                        const userText = typeof newTurn.user === 'string' ? newTurn.user : '';
+                        newTurn.user = {
+                            history: [{ text: userText, files: [] }],
+                            currentVersion: 0
+                        };
+                    }
+
+                    // Migrate AI message if it's not in the new format
+                    if (!newTurn.ai || !Array.isArray(newTurn.ai.history)) {
+                        const aiText = typeof newTurn.ai === 'string' ? newTurn.ai : '';
+                        newTurn.ai = {
+                            history: aiText ? [{ text: aiText }] : [],
+                            currentVersion: aiText ? 0 : 0
+                        };
+                    }
+
+                    // Ensure currentVersion is a valid index
+                    if (newTurn.user.currentVersion >= newTurn.user.history.length) {
+                        newTurn.user.currentVersion = Math.max(0, newTurn.user.history.length - 1);
+                    }
+                    if (newTurn.ai.currentVersion >= newTurn.ai.history.length) {
+                        newTurn.ai.currentVersion = Math.max(0, newTurn.ai.history.length - 1);
+                    }
+
+                    return newTurn;
+                });
+                return chat;
+            });
+        },
     }
 };
 
@@ -725,9 +810,47 @@ const router = VueRouter.createRouter({
 });
 
 // 4. Create and mount the root instance.
-const App = {
-    template: `<router-view></router-view>`
-};
-const app = Vue.createApp(App);
+const app = Vue.createApp({
+    data() {
+        return {
+            notifications: []
+        };
+    },
+    methods: {
+        addNotification(message, type = 'success', duration = 3000) {
+            const id = Date.now();
+            this.notifications.push({ id, message, type });
+            setTimeout(() => {
+                const index = this.notifications.findIndex(n => n.id === id);
+                if (index !== -1) {
+                    this.notifications.splice(index, 1);
+                }
+            }, duration);
+        },
+        handleChatError(error) {
+            this.addNotification(error, 'error');
+            this.$router.push('/');
+        },
+        provideApp(appContext) {
+            appContext.config.globalProperties.$notifications = {
+                add: this.addNotification
+            };
+            appContext.config.globalProperties.$chatError = this.handleChatError;
+        }
+    },
+    created() {
+        this.provideApp(this.$.appContext);
+    },
+    template: `
+        <router-view />
+        <div id="notification_container">
+            <div v-for="notification in notifications" :key="notification.id" class="notification" :class="'notification_' + notification.type">
+                <i :class="notification.type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
+                <div class="notification_message">{{ notification.message }}</div>
+            </div>
+        </div>
+    `
+});
+
 app.use(router);
 app.mount('#app');
