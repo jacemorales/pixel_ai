@@ -440,6 +440,11 @@ a{
     z-index: 2;
 }
 
+.message_actions div{
+    display: flex;
+    gap: 8px;
+}
+
 .message_bubble.user_search .message_actions {
     right: 15px;
     color: #eee; /* Adjust color for better contrast on gradient */
@@ -482,12 +487,9 @@ a{
 
 /* --- Search Input Area --- */
 .intro.bottom {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
     padding: 20px;
     background-color: var(--background-color);
+    width: 100%;
 }
 
 .intro.center {
@@ -504,8 +506,10 @@ a{
     display: flex;
     flex-direction: column;
     border: 1px solid #e5e7eb;
+    width: 90%;
     max-width: 800px;
     margin: 0 auto;
+    transition: all 0.3s ease;
 }
 
 .search {
@@ -641,35 +645,22 @@ a{
 
 .wave:nth-child(2) { animation-delay: -1.0s; }
 .wave:nth-child(3) { animation-delay: -0.8s; }
+.wave:nth-child(4) { animation-delay: -0.8s; }
+.wave:nth-child(5) { animation-delay: -0.8s; }
+.wave:nth-child(6) { animation-delay: -0.8s; }
+.wave:nth-child(7) { animation-delay: -0.8s; }
+.wave:nth-child(8) { animation-delay: -0.8s; }
+.wave:nth-child(9) { animation-delay: -0.8s; }
+.wave:nth-child(10) { animation-delay: -0.8s; }
+.wave:nth-child(11) { animation-delay: -0.8s; }
+.wave:nth-child(12) { animation-delay: -0.8s; }
+.wave:nth-child(3) { animation-delay: -0.8s; }
+.wave:nth-child(3) { animation-delay: -0.8s; }
+.wave:nth-child(3) { animation-delay: -0.8s; }
 
 @keyframes wave-animation {
     0%, 40%, 100% { transform: scaleY(0.4); }
     20% { transform: scaleY(1.0); }
-}
-
-/* Tooltip */
-.tooltip {
-    position: relative;
-}
-.tooltip:before {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 125%;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #333;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s, visibility 0.2s;
-}
-.tooltip:hover:before {
-    opacity: 1;
-    visibility: visible;
 }
 
 /* --- TTS Animation Overlay --- */
@@ -789,6 +780,25 @@ a{
     font-size: 14px;
     color: #555;
     margin-bottom: 25px;
+}
+
+.modal_input_container {
+    margin-bottom: 25px;
+}
+
+.modal_input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font-family);
+}
+
+.modal_input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
 .modal_actions {

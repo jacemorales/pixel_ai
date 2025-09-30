@@ -21,7 +21,7 @@ const ChatComponent = {
                             <div class="history_item_actions">
                                 <i class="fas fa-ellipsis-h" @click.stop.prevent="toggleChatMenu(chat.id)"></i>
                                 <div class="chat_menu" v-if="activeChatMenu === chat.id">
-                                    <a href="#">Edit name</a>
+                                    <a href="#" @click.prevent="showModal('editChatName', chat.id)">Edit name</a>
                                     <a href="#" @click.prevent="showModal('clearChat', chat.id)">Clear chat</a>
                                     <a href="#" class="delete" @click.prevent="showModal('deleteChat', chat.id)">Delete chat</a>
                                 </div>
@@ -56,15 +56,15 @@ const ChatComponent = {
                                 <span class="message_text">{{ msg.text }}</span>
                                 <div class="message_actions">
                                      <div v-if="msg.sender === 'ai_results'">
-                                        <i class="fas fa-copy tooltip" data-tooltip="Copy" @click="copyMessage(msg.text)"></i>
-                                        <i class="fas fa-volume-up speaker-icon tooltip" data-tooltip="Read aloud" @click="speakMessage(msg.text)"></i>
-                                        <i class="fas fa-reply reply-icon tooltip" data-tooltip="Reply" @click="replyToMessage(msg)"></i>
-                                        <i class="fas fa-sync-alt tooltip" data-tooltip="Regenerate" @click="regenerateResponse(msg)"></i>
+                                        <i class="fas fa-copy" @click="copyMessage(msg.text)"></i>
+                                        <i class="fas fa-volume-up speaker-icon" @click="speakMessage(msg.text)"></i>
+                                        <i class="fas fa-reply reply-icon" @click="replyToMessage(msg)"></i>
+                                        <i class="fas fa-sync-alt" @click="regenerateResponse(msg)"></i>
                                     </div>
                                     <div v-if="msg.sender === 'user_search'">
-                                        <i class="fas fa-copy tooltip" data-tooltip="Copy" @click="copyMessage(msg.text)"></i>
-                                        <i class="fas fa-pencil-alt tooltip" data-tooltip="Edit" @click="editMessage(msg, index)"></i>
-                                        <i class="fas fa-redo tooltip" data-tooltip="Resend" @click="resendMessage(msg)"></i>
+                                        <i class="fas fa-copy" @click="copyMessage(msg.text)"></i>
+                                        <i class="fas fa-pencil-alt" @click="editMessage(msg, index)"></i>
+                                        <i class="fas fa-redo" @click="resendMessage(msg)"></i>
                                     </div>
                                 </div>
                             </div>
@@ -103,11 +103,11 @@ const ChatComponent = {
                         </div>
                         
                         <div class="search_utilis">
-                            <div class="import_file tooltip" data-tooltip="Import file" @click="triggerFileInput">
+                            <div class="import_file" @click="triggerFileInput">
                                 <i class="fas fa-plus"></i>
                                 <input type="file" ref="fileInput" style="display: none;" @change="handleFileImport" multiple>
                             </div>
-                            <div class="mic_icon tooltip" data-tooltip="Voice search" @click="toggleVoiceSearch">
+                            <div class="mic_icon" @click="toggleVoiceSearch">
                                 <i class="fas fa-microphone"></i>
                             </div>
                              <div class="recording_animation" v-show="isRecording">
@@ -128,7 +128,10 @@ const ChatComponent = {
         <div class="modal_overlay" v-if="isModalVisible" @click="hideModal">
             <div class="modal_content" @click.stop>
                 <h3 class="modal_title">{{ modalConfig.title }}</h3>
-                <p class="modal_message">{{ modalConfig.message }}</p>
+                <p v-if="modalConfig.message" class="modal_message">{{ modalConfig.message }}</p>
+                <div v-if="modalConfig.showInput" class="modal_input_container">
+                    <input type="text" v-model="modalInput" class="modal_input" ref="modalInput" @keyup.enter="confirmAction">
+                </div>
                 <div class="modal_actions">
                     <button class="modal_button cancel" @click="hideModal">{{ modalConfig.cancelText }}</button>
                     <button class="modal_button confirm" :class="modalConfig.confirmClass" @click="confirmAction">{{ modalConfig.confirmText }}</button>
@@ -170,7 +173,7 @@ const ChatComponent = {
         return {
             app: 'Pixel AI',
             chats: [],
-            activeChatId: this.$route.params.id,
+            activeChatId: null,
             isRecording: false,
             recognition: null,
             replyingToMessage: null,
@@ -185,6 +188,7 @@ const ChatComponent = {
             isModalVisible: false,
             modalConfig: {},
             actionToConfirm: null,
+            modalInput: '',
             isTtsVisible: false,
             ttsStatus: '',
             ttsWords: [],
@@ -214,7 +218,7 @@ const ChatComponent = {
             }
         },
         '$route'(to, from) {
-            this.activeChatId = to.params.id;
+            this.activeChatId = to.params.id || null;
         },
         messages: {
             deep: true,
@@ -233,10 +237,9 @@ const ChatComponent = {
         if (savedChats) {
             this.chats = JSON.parse(savedChats);
         }
-        if (this.chats.length === 0) {
-            this.newChat(false); // Create initial chat without navigating
-        }
-        
+        // Set active chat based on route, but don't create a new one automatically
+        this.activeChatId = this.$route.params.id || null;
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
             this.recognition = new SpeechRecognition();
@@ -280,7 +283,6 @@ const ChatComponent = {
         },
         
         getKey(event) {
-            if (!this.activeChat) return;
             const textarea = event.target;
             this.autoResize(textarea);
 
@@ -289,7 +291,7 @@ const ChatComponent = {
                 const messageText = textarea.value.trim();
 
                 if (this.editingMessage !== null) {
-                    if (messageText) {
+                    if (messageText && this.activeChat) {
                         this.activeChat.messages[this.editingMessage.index].text = messageText;
                         this.editingMessage = null;
                         textarea.value = "";
@@ -297,6 +299,22 @@ const ChatComponent = {
                     }
                 } else {
                     if (messageText || this.importedFiles.length > 0) {
+                        let targetChat = this.activeChat;
+
+                        // If there is no active chat, create a new one.
+                        if (!targetChat) {
+                            const newId = this.generateUniqueId();
+                            const chatName = messageText.substring(0, 40) + (messageText.length > 40 ? '...' : '') || 'New Chat';
+                            const newChatObject = {
+                                id: newId,
+                                name: chatName,
+                                messages: []
+                            };
+                            this.chats.push(newChatObject);
+                            this.$router.push(`/chat/${newId}`); // This will trigger watcher to set activeChatId
+                            targetChat = newChatObject;
+                        }
+                        
                         const newMessage = {
                             text: messageText,
                             sender: 'user_search',
@@ -307,15 +325,15 @@ const ChatComponent = {
                             files: this.importedFiles,
                         };
                         
-                        // Auto-name chat if it's the first message
-                        if (this.activeChat.name === 'New Chat' && messageText) {
-                           this.activeChat.name = messageText.substring(0, 40) + (messageText.length > 40 ? '...' : '');
+                        // Auto-name chat if it's the first message and name is still default
+                        if (targetChat.messages.length === 0 && messageText) {
+                           targetChat.name = messageText.substring(0, 40) + (messageText.length > 40 ? '...' : '');
                         }
                         
-                        this.activeChat.messages.push(newMessage);
+                        targetChat.messages.push(newMessage);
 
                         setTimeout(() => {
-                            this.activeChat.messages.push({
+                            targetChat.messages.push({
                                 text: "This is a placeholder AI response.",
                                 sender: "ai_results"
                             });
@@ -547,6 +565,7 @@ const ChatComponent = {
         },
         showModal(actionType, payload) {
             this.activeChatMenu = null;
+            const chat = this.chats.find(c => c.id === payload);
             const configs = {
                 deleteChat: {
                     title: 'Delete Chat',
@@ -554,7 +573,8 @@ const ChatComponent = {
                     confirmText: 'Delete',
                     cancelText: 'Cancel',
                     action: () => this.deleteChat(payload),
-                    confirmClass: 'delete'
+                    confirmClass: 'delete',
+                    showInput: false
                 },
                 clearChat: {
                     title: 'Clear Chat',
@@ -562,16 +582,37 @@ const ChatComponent = {
                     confirmText: 'Clear',
                     cancelText: 'Cancel',
                     action: () => this.clearChat(payload),
-                    confirmClass: 'primary'
+                    confirmClass: 'primary',
+                    showInput: false
+                },
+                editChatName: {
+                    title: 'Edit Chat Name',
+                    message: '',
+                    confirmText: 'Save',
+                    cancelText: 'Cancel',
+                    action: () => this.updateChatName(payload),
+                    confirmClass: 'primary',
+                    showInput: true
                 }
             };
             this.modalConfig = configs[actionType];
             this.actionToConfirm = configs[actionType].action;
+            if (this.modalConfig.showInput && chat) {
+                this.modalInput = chat.name;
+            } else {
+                this.modalInput = '';
+            }
             this.isModalVisible = true;
+            if (this.modalConfig.showInput) {
+                this.$nextTick(() => {
+                    this.$refs.modalInput.focus();
+                });
+            }
         },
         hideModal() {
             this.isModalVisible = false;
             this.actionToConfirm = null;
+            this.modalInput = '';
         },
         confirmAction() {
             if (this.actionToConfirm) {
@@ -579,21 +620,20 @@ const ChatComponent = {
             }
             this.hideModal();
         },
+        updateChatName(chatId) {
+            const chat = this.chats.find(c => c.id === chatId);
+            const newName = this.modalInput.trim();
+            if (chat && newName) {
+                chat.name = newName;
+            }
+        },
         generateUniqueId() {
             return '_' + Math.random().toString(36).substr(2, 9);
         },
-        newChat(navigate = true) {
-            const newId = this.generateUniqueId();
-            this.chats.push({
-                id: newId,
-                name: 'New Chat',
-                messages: []
-            });
-            if (navigate) {
-                this.$router.push(`/chat/${newId}`);
-            } else {
-                this.activeChatId = newId;
-            }
+        newChat() {
+            // Don't create a new chat object yet. Just clear the view.
+            this.$router.push('/');
+            this.activeChatId = null;
         },
         switchChat(chatId) {
             this.$router.push(`/chat/${chatId}`);
@@ -623,22 +663,13 @@ const ChatComponent = {
 
 // 2. Define Routes
 const routes = [
-    { 
-        path: '/chat/:id', 
-        component: ChatComponent 
+    {
+        path: '/chat/:id',
+        component: ChatComponent
     },
-    { 
-        path: '/', 
-        redirect: to => {
-            const savedChats = localStorage.getItem("pixelAiChats");
-            if (savedChats) {
-                const chats = JSON.parse(savedChats);
-                if (chats.length > 0) {
-                    return { path: `/chat/${chats[0].id}` };
-                }
-            }
-            return { path: '/chat/initial' };
-        }
+    {
+        path: '/',
+        component: ChatComponent
     }
 ];
 
