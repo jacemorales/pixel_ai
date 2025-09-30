@@ -13,97 +13,11 @@
     <body>
         
         <div id="app" v-cloak>
-        <div class="app_container" :class="{ 'nav_closed': isNavClosed }">
-            
-            <div class="open_icon" @click="toggleNav"><i class="fas fa-bars"></i></div>
-            <div class="nav_overlay" @click="toggleNav"></div>
+            <router-view></router-view>
+        </div>
 
-            <div class="nav" :class="{ 'close': isNavClosed }">
-                <div class="profile"><img src="img.jpg">
-                    <div class="profile_name">
-                        <div class="user_firstname">Jace</div>
-                        <div class="user_lastname">Morales</div>
-                    </div>
-                </div>
-                <div class="chats">
-                    <div class="new_chat" title="New Chat"><div class="add_icon"><i class="fas fa-plus"></i></div><div class="chat_txt">New Chat</div></div>
-                    <div class="chat_history">
-                        <a href="" class="history_item">How to make soda</a>
-                        <a href="" class="history_item">How to make soda</a>
-                        <a href="" class="history_item">How to make soda</a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="app_main">
-                <div class="chat_container" >
-                    <div class="chat_container_content">
-                        <div v-for="(msg, index) in messages" :key="index" :class="['message_bubble', msg.sender]">
-                            <div class="message_content">
-                                <div v-if="msg.replyTo" class="quoted_reply">
-                                    <p>{{ msg.replyTo.text }}</p>
-                                </div>
-                                <div v-if="msg.file" class="attached_file">
-                                    <i class="fas fa-file-alt"></i>
-                                    <div class="file_details">
-                                        <span class="file_name">{{ msg.file.name }}</span>
-                                        <span class="file_type">{{ msg.file.type }}</span>
-                                    </div>
-                                </div>
-                                {{ msg.text }}
-                            </div>
-                            <div class="message_actions" v-if="msg.sender === 'ai_results'">
-                                <i class="fas fa-volume-up speaker-icon" @click="speakMessage(msg.text)"></i>
-                                <i class="fas fa-reply reply-icon" @click="replyToMessage(msg)"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <button @click="clearChat" class="clear-btn">Clear Chat</button>
-                    <div class="dummy"></div>
-                </div>
-                <div class="intro bottom">
-                    <div class="app_name">{{app}}</div>
-                    <div class="app_info">Powered by <span>Pixel v1 Chat Engine</span></div>
-                    <div class="container">
-                        <div class="search">
-                             <div class="replying_to_bar" v-if="replyingToMessage">
-                                <div class="reply_info">
-                                    <i class="fas fa-reply"></i>
-                                    <p>Replying to: "<span>{{ replyingToMessage.text }}</span>"</p>
-                                </div>
-                                <i class="fas fa-times cancel_reply" @click="cancelReply"></i>
-                            </div>
-                            <textarea rows="1" @keyup="getKey" ref="searchInput" name="ai_search" id="search_bar" placeholder="Pixel AI Search..."></textarea>
-                             <div class="file_display" v-if="importedFile">
-                                <span class="file_name">{{ importedFile.name }}</span>
-                                <span class="file_type">({{ importedFile.type }})</span>
-                            </div>
-                        </div>
-                        
-                        <div class="search_utilis">
-                            <div class="import_file tooltip" data-tooltip="Import file" @click="triggerFileInput">
-                                <i class="fas fa-plus"></i>
-                                <input type="file" ref="fileInput" style="display: none;" @change="handleFileImport">
-                            </div>
-                            <div class="mic_icon tooltip" data-tooltip="Voice search" @click="toggleVoiceSearch">
-                                <i class="fas fa-microphone"></i>
-                            </div>
-                             <div class="recording_animation" v-show="isRecording">
-                                <div class="wave"></div>
-                                <div class="wave"></div>
-                                <div class="wave"></div>
-                            </div>
-                            <div class="submit_search">
-                               <i class="fas fa-arrow-up"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        </div>
     </body>
     </html>
-    <script src="vue.global.js"></script>
+    <script src="https://unpkg.com/vue@3"></script>
+    <script src="https://unpkg.com/vue-router@4"></script>
     <script src="vue_script.js"></script>
-    
